@@ -1,217 +1,108 @@
-# Sorting Visualizer
+# 2.5D Platformer Project
 
-A step-by-step sorting algorithm visualizer built with **C++ and raylib**.
+A 2.5D platformer prototype built in Unity, featuring `CharacterController`-based movement (jump, double jump, wall jump, dash), an inheritance-based enemy AI system, health/damage for both player and enemies, and the basic menu → gameplay → end screen flow.
 
-This project provides a visual and interactive way to understand how different sorting algorithms work by displaying comparisons, swaps, execution time, and the current state of the array.
+## Table of Contents
 
-The project was created as a programming and algorithms project focused on **C++, object-oriented programming, algorithm implementation, and visualization**.
-
-## GIFs
-
-<img width="1284" height="768" alt="Sorter" src="https://github.com/user-attachments/assets/a5ddbdc5-37c0-4076-b5f0-dda49992ea07" />
-
-<img width="1284" height="768" alt="Sorter 2" src="https://github.com/user-attachments/assets/e17cdad9-ff1c-48b5-a21d-b7f93e4f948c" />
+- [Features](#features)
+- [Script Overview](#script-overview)
+- [Project Setup](#project-setup)
+- [Controls](#controls)
+- [Possible Next Steps](#possible-next-steps)
 
 ## Features
 
-* Visual representation of sorting algorithms using bars
-* Step-by-step sorting animation
-* Real-time comparison and swap counters
-* Sorting time display
-* Adjustable sorting speed
-* Pause and resume functionality
-* Random array generation
-* Switch between algorithms using keyboard shortcuts
-* Every algorithm starts with the **same original array** when switching algorithms
-* Visual indication of elements currently being compared
-* Sorted elements turn **green** when they reach their final position
-* Resizable window support
+### Player
+- Horizontal movement, jump and double jump.
+- Wall slide and wall jump (slide down a wall and jump away from it).
+- Dash with cooldown.
+- Stomp: jumping on an enemy's head kills it instantly and gives the player a small upward bounce.
+- Pushes `Rigidbody` objects (e.g. a dead enemy's corpse).
+- Health with a brief invulnerability window after taking damage, plus knockback feedback (a small hop backward) when hit.
 
-## Sorting Algorithms
+### Enemies
+- Inheritance-based state machine: an abstract base class (`EnemyController`) handles health, damage, death, player detection and movement; each enemy type only implements its own patrol/chase/attack behavior.
+- Two example enemies: melee (chases and attacks on contact) and ranged (keeps its distance and fires projectiles).
+- Player detection via triggers (detection/attack zones), instead of searching for a `GameObject` by tag.
+- Ledge detection during patrol (turns around before walking off a platform).
+- On death, the enemy is replaced by a separate physical "corpse" (`Rigidbody` + `Collider`) that the player can push around like a box.
 
-The visualizer currently includes:
+### Level
+- Camera that follows the player smoothly, with look-ahead and optional scene bounds.
+- Spike trap (contact damage with a cooldown).
+- Collectible health pickup.
+- Level-end trigger.
 
-1. **Bubble Sort**
-2. **Insertion Sort**
-3. **Selection Sort**
-4. **Merge Sort**
-5. **Quick Sort**
-6. **Bucket Sort**
-7. **Heap Sort**
-8. **Intro Sort**
+### Game Flow
+- Main menu, pause, and end screen, with scene switching centralized in a single utility.
 
-All algorithms use a common interface, allowing them to be managed by the same visualizer.
+## Script Overview
+
+| Script | Description |
+|---|---|
+| `PlayerCharacterController.cs` | Player movement, jump, wall jump, dash, stomp, push and damage feedback. |
+| `PlayerHealth.cs` | Player health: damage, healing, temporary invulnerability, events (`OnHealthChanged`, `OnDeath`). |
+| `PlayerStompDetector.cs` | Trigger on the player's feet; kills enemies when stomped on and triggers the bounce. |
+| `IDamageable.cs` | Common interface (`TakeDamage`) implemented by both the player and enemies. |
+| `EnemyController.cs` | Abstract base class for enemies: state, health, damage, death, detection, movement, edge detection. |
+| `MeleeEnemyController.cs` | Melee enemy: patrols, chases and attacks on contact. |
+| `RangedEnemyController.cs` | Ranged enemy: keeps its distance from the player and fires projectiles. |
+| `EnemyDetectionZone.cs` | Trigger (detection/attack) used by enemies to find the player. |
+| `Projectile.cs` | Projectile fired by ranged enemies; damages the player on hit. |
+| `HealthPickup.cs` | Collectible item that heals the player on contact. |
+| `SpikeTrap.cs` | Simple trap: deals contact damage with a cooldown. |
+| `CameraFollow.cs` | Camera that follows the player with smoothing and look-ahead. |
+| `SceneLoader.cs` | Static scene-switching, reload and quit utility, used by the menu/pause/end screen. |
+| `MainMenuController.cs` | Main menu buttons (Play/Quit). |
+| `PauseController.cs` | Game pause (`Time.timeScale`), with Resume/Restart/Menu/Quit. |
+| `LevelEndTrigger.cs` | Trigger at the level's goal point; shows the end screen. |
+| `EndScreenController.cs` | End screen buttons (Restart/Next Level/Main Menu). |
+
+## Project Setup
+
+### Tags
+- `Player` — on the player's root GameObject.
+- `Enemy` — on enemy GameObjects (used by `PlayerStompDetector`).
+
+### Layers
+- `Wall` — used by the player's wall jump (`wallCheckDistance`).
+- `Ground` — used by the enemies' ledge detection (`EnemyController.IsEdgeAhead`).
+
+Without these layers created with these exact names, the corresponding automatic fallbacks fail silently (`EnemyController` logs a warning to the Console when that happens).
+
+### Animator Parameters
+
+**Player:**
+- `Side` (Int) — 0 idle, 1 right, 2 left
+- `Speed` (Float), `IsGrounded` (Bool), `VerticalVelocity` (Float), `IsWallSliding` (Bool), `IsDashing` (Bool)
+- `Jump`, `Attack`, `Hurt` (Triggers)
+
+**Enemies:**
+- `Speed` (Float), `IsGrounded` (Bool), `IsChasing` (Bool)
+- `Attack`, `Hurt`, `Death` (Triggers)
+
+### Prefab Components
+
+- **Player**: `CharacterController`, `Animator`, `PlayerCharacterController`, `PlayerHealth`, plus a child object with a trigger `Collider` + `PlayerStompDetector`.
+- **Enemy (alive)**: `CharacterController`, `Animator`, `MeleeEnemyController` or `RangedEnemyController`, plus children with trigger `Collider`s + `EnemyDetectionZone` (one for detection, one for attack). References a separate `corpsePrefab`.
+- **Enemy corpse** (separate prefab): the enemy's visual + a regular `Collider` + a non-kinematic `Rigidbody` — no AI scripts at all.
+- **Projectile** (used by the ranged enemy): `Collider`, `Rigidbody`, `Projectile`.
+
+### Scenes
+All scenes in use (menu, levels) need to be added to `File > Build Settings > Scenes In Build` for `SceneManager.LoadScene` to work by name.
 
 ## Controls
 
-| Key     | Action                 |
-| ------- | ---------------------- |
-| `1`     | Bubble Sort            |
-| `2`     | Insertion Sort         |
-| `3`     | Selection Sort         |
-| `4`     | Merge Sort             |
-| `5`     | Quick Sort             |
-| `6`     | Bucket Sort            |
-| `7`     | Heap Sort              |
-| `8`     | Intro Sort             |
-| `SPACE` | Pause / Resume         |
-| `R`     | Generate a new array   |
-| `UP`    | Increase sorting speed |
-| `DOWN`  | Decrease sorting speed |
+| Action | Input |
+|---|---|
+| Move | Configured in `InputManager` (`OnPlayerMove`) |
+| Jump / Double Jump / Wall Jump | `OnJump` |
+| Dash | `OnDash` |
+| Pause | `Escape` (configurable in `PauseController`) |
 
-## Visualization
+## Possible Next Steps
 
-Each bar represents one element of the array. The height of the bar corresponds to its value.
-
-During the sorting process:
-
-* **White** — Normal element
-* **Comparison color** — Element currently being compared
-* **Green** — Element that has reached its final sorted position
-
-The interface also displays statistics such as:
-
-```text
-Algorithm: Quick Sort
-Time: 3.421 s
-Comparisons: 1234
-Swaps: 567
-Elements: 100
-Delay: 0.05
-```
-
-## Architecture
-
-The project uses an abstract `SortingAlgorithm` class as a common interface for all sorting algorithms.
-
-Each algorithm implements:
-
-```cpp
-virtual void Start(std::vector<Element>& array) = 0;
-virtual void Step() = 0;
-virtual bool IsFinished() const = 0;
-
-virtual uint64_t GetComparisons() const = 0;
-virtual uint64_t GetSwaps() const = 0;
-
-virtual const char* GetName() const = 0;
-```
-
-This allows the `Visualizer` to work with any sorting algorithm without needing to know its internal implementation.
-
-For example:
-
-```cpp
-mAlgorithm->Step();
-```
-
-The visualizer simply asks the current algorithm to perform its next operation.
-
-## Step-Based Sorting
-
-Instead of running an entire sorting algorithm in a single function call, each algorithm is divided into small steps.
-
-This allows the sorting process to be visualized as it executes:
-
-```text
-Start
-  ↓
-Compare
-  ↓
-Swap / Move
-  ↓
-Compare
-  ↓
-Swap / Move
-  ↓
-...
-  ↓
-Finished
-```
-
-This approach makes the behavior of each algorithm easier to observe and understand.
-
-## Project Structure
-
-```text
-SortingVisualizer/
-│
-├── Element.h
-├── SortingAlgorithm.h
-│
-├── BubbleSort.h
-├── BubbleSort.cpp
-│
-├── InsertionSort.h
-├── InsertionSort.cpp
-│
-├── SelectionSort.h
-├── SelectionSort.cpp
-│
-├── MergeSort.h
-├── MergeSort.cpp
-│
-├── QuickSort.h
-├── QuickSort.cpp
-│
-├── BucketSort.h
-├── BucketSort.cpp
-│
-├── HeapSort.h
-├── HeapSort.cpp
-│
-├── IntroSort.h
-├── IntroSort.cpp
-│
-├── Visualizer.h
-├── Visualizer.cpp
-│
-└── main.cpp
-```
-
-## Technologies
-
-* **C++**
-* **raylib**
-* Object-Oriented Programming
-* STL containers
-* Sorting algorithms
-* Algorithm visualization
-* Step-based algorithm execution
-
-## Purpose
-
-This project was created to strengthen my understanding of:
-
-* Sorting algorithms
-* Algorithm complexity
-* C++ object-oriented programming
-* Polymorphism
-* State-based algorithm execution
-* Data visualization
-* Performance statistics
-* Software architecture
-
-It also serves as a portfolio project demonstrating my ability to implement algorithms and build an interactive visualization system around them.
-
-## Future Improvements
-
-Possible improvements for future versions include:
-
-* Add more sorting algorithms
-* Add algorithm complexity information to the UI
-* Add a direct performance comparison mode
-* Improve Bucket Sort visualization
-* Improve Intro Sort implementation
-* Add custom array sizes
-* Add different visualization styles
-* Add mouse interaction
-* Add algorithm-specific explanations
-* Add graphs comparing algorithm statistics
-
-## Author
-
-**João Gozzi**
-Game Programmer / Game Programming Student
-
-Focused on **C++, C#, Unity, Unreal Engine, gameplay programming, UI programming, and technical problem solving**.
+- Player melee attack (currently only the `Attack` state exists; the actual hitbox/damage is still missing).
+- A full `Hurt` state for the player (right now knockback only locks horizontal movement).
+- Sound and particle feedback (damage, death, pickup, dash).
+- Save/checkpoint system between levels.
